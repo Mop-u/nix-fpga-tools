@@ -3,11 +3,10 @@
   lib,
   callPackage,
   buildFHSEnv,
-  writeScript,
+  fetchFromGitHub,
   makeDesktopItem,
   runtimeShell,
   libsForQt5,
-  libstdcxx5,
   libusb-compat-0_1,
   libusb1,
 }:
@@ -25,12 +24,22 @@ let
         ln -s ${pkgs.motif}/lib/libXm.so.4 $out/lib/libXm.so.3
       '';
     };
+  libstdcxx5 =
+    pkgs:
+    (import (fetchFromGitHub {
+      owner = "NixOS";
+      repo = "nixpkgs";
+      rev = "c8bb7b26f2c6ecc39be2c4ddde5f5d152e4abc65";
+      hash = "sha256-8+rgprS5YWlEA4vILg/MBKqlgm+HPEdUAhlTFQO0Tmc=";
+
+    }) { inherit (pkgs.stdenv.hostPlatform) system; }).libstdcxx5;
 in
 buildFHSEnv rec {
   name = "xilinx-ise";
 
   targetPkgs =
     pkgs: with pkgs; [
+      # (libstdcxx5 pkgs)
       fontconfig
       freetype
       glib
