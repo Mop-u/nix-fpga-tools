@@ -1,7 +1,6 @@
-{ stdenv, lib, pkgs, callPackage, writeScript, makeDesktopItem, libstdcxx5 }:
+{ stdenv, lib, pkgs, callPackage, buildFHSEnv, writeScript, makeDesktopItem, libstdcxx5 }:
 
 let
-  buildFHSUserEnv = callPackage ./fhs.nix { };
   unwrapped = callPackage ./unwrapped.nix { };
   xilinx-jtag-fw = callPackage ./jtag-fw.nix { };
   motif3-compat = pkgs: stdenv.mkDerivation {
@@ -12,7 +11,7 @@ let
       ln -s ${pkgs.motif}/lib/libXm.so.4 $out/lib/libXm.so.3
     '';
   };
-in buildFHSUserEnv rec {
+in buildFHSEnv rec {
   name = "xilinx-ise";
 
   targetPkgs = pkgs: with pkgs; [
