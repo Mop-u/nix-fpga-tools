@@ -1,12 +1,15 @@
 {
   stdenv,
   lib,
-  pkgs,
   callPackage,
   buildFHSEnv,
   writeScript,
   makeDesktopItem,
+  runtimeShell,
+  libsForQt5,
   libstdcxx5,
+  libusb-compat-0_1,
+  libusb1,
 }:
 
 let
@@ -107,7 +110,7 @@ buildFHSEnv rec {
       WRAPPER=$out/bin/${name}
       EXECUTABLES="${lib.concatStringsSep " " executables}"
       for executable in $EXECUTABLES; do
-          echo "#!${stdenv.shell}" >> $out/$executable
+          echo "#!${runtimeShell}" >> $out/$executable
           echo "$WRAPPER $executable \$@" >> $out/$executable
       done
       cd $out
@@ -116,7 +119,7 @@ buildFHSEnv rec {
       ln --symbolic --relative --target-directory $out/bin $EXECUTABLES
     '';
 
-  runScript = writeScript "${name}-wrapper" ''
+  profile = ''
     # Create the eth0 interface required for the included license.
     ip link add eth0 type dummy
     ip link set dev eth0 address 08:00:27:68:C9:35
@@ -128,19 +131,17 @@ buildFHSEnv rec {
     source /opt/Xilinx/14.7/ISE_DS/ISE/.settings64.sh /opt/Xilinx/14.7/ISE_DS/ISE
 
     # Required to use QT5 in place of QT6
-    export LD_LIBRARY_PATH=${pkgs.libsForQt5.qtbase}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libsForQt5.qtdeclarative}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libsForQt5.qtimageformats}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libsForQt5.qtsvg}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libsForQt5.qtx11extras}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libsForQt5.qtbase}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libsForQt5.qtdeclarative}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libsForQt5.qtimageformats}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libsForQt5.qtsvg}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libsForQt5.qtx11extras}/lib:$LD_LIBRARY_PATH
 
-    export LD_LIBRARY_PATH=${pkgs.libusb-compat-0_1}/lib:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=${pkgs.libusb1}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libusb-compat-0_1}/lib:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${libusb1}/lib:$LD_LIBRARY_PATH
 
     # Copied from the Arch Linux Wiki: https://wiki.archlinux.org/title/Xilinx_ISE_WebPACK#Running_Xilinx_tools_from_within_KDE
     unset QT_PLUGIN_PATH
-
-    # Execute target.
-    exec $@
   '';
+  runScript = "";
 }
