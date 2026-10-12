@@ -9,8 +9,8 @@
   libsForQt5,
   libusb-compat-0_1,
   libusb1,
+  passt,
 }:
-
 let
   unwrapped = callPackage ./unwrapped.nix { };
   xilinx-jtag-fw = callPackage ./jtag-fw.nix { };
@@ -35,7 +35,8 @@ let
     }) { inherit (pkgs.stdenv.hostPlatform) system; }).libstdcxx5;
 in
 buildFHSEnv rec {
-  name = "xilinx-ise";
+  pname = "xilinx-ise";
+  inherit (unwrapped) version;
 
   targetPkgs =
     pkgs: with pkgs; [
@@ -81,15 +82,17 @@ buildFHSEnv rec {
       ncurses5
     ];
 
-  # Network namespace required so that a dummy NIC with the required MAC can
-  # be provided.
-  unshareNet = true;
-
+  unshareUser = true;
   extraBwrapArgs = [
     "--ro-bind ${unwrapped}/opt/Xilinx /opt/Xilinx"
     "--ro-bind ${unwrapped}/home/ise/.Xilinx/Xilinx.lic ~/.Xilinx/Xilinx.lic"
-    "--cap-add CAP_NET_ADMIN"
+    # Don't appear as root in the final environment
+    "--uid $bwrap_uid"
+    "--gid $bwrap_gid"
   ];
+
+  # Rename the bwrap wrapper as we have an outer network wrapper
+  executableName = "${pname}-bwrap";
 
   extraInstallCommands =
     let
@@ -104,7 +107,7 @@ buildFHSEnv rec {
             desktopName = item.name;
             comment = item.name;
             icon = "${unwrapped}/opt/Xilinx/14.7/ISE_DS/ISE/icons/${item.icon}";
-            exec = "${name} ${item.exec}";
+            exec = "${item.exec}";
           };
         in
         str + "ln -s ${desktopItem}/share/applications/* $out/share/applications\n"
@@ -116,11 +119,29 @@ buildFHSEnv rec {
       mkdir -p $out/share/applications
       ${desktopItemSymlinks}
 
-      WRAPPER=$out/bin/${name}
+      bubblewrap=$out/bin/${executableName}
+      wrapper=$out/bin/${pname}
+      cat > "$wrapper" <<EOT
+      #!${runtimeShell}
+      export bwrap_uid=\$(id -u)
+      export bwrap_gid=\$(id -g)
+      ${passt}/bin/pasta \
+        --quiet \
+        --runas \$(whoami) \
+        --hostname \$(hostname) \
+        --ns-mac-addr 08:00:27:68:C9:35 \
+        --ns-ifname eth0 \
+        --config-net \
+        $bubblewrap "\$@"
+      EOT
+      chmod +x "$wrapper"
+
       EXECUTABLES="${lib.concatStringsSep " " executables}"
       for executable in $EXECUTABLES; do
-          echo "#!${runtimeShell}" >> $out/$executable
-          echo "$WRAPPER $executable \$@" >> $out/$executable
+      cat > "$out/$executable" <<EOT
+      #!${runtimeShell}
+      $wrapper $executable "\$@"
+      EOT
       done
       cd $out
       chmod +x $EXECUTABLES
@@ -129,10 +150,6 @@ buildFHSEnv rec {
     '';
 
   profile = ''
-    # Create the eth0 interface required for the included license.
-    ip link add eth0 type dummy
-    ip link set dev eth0 address 08:00:27:68:C9:35
-
     # Configure the environment.
     source /opt/Xilinx/14.7/ISE_DS/common/.settings64.sh /opt/Xilinx/14.7/ISE_DS/common
     source /opt/Xilinx/14.7/ISE_DS/EDK/.settings64.sh /opt/Xilinx/14.7/ISE_DS/EDK
