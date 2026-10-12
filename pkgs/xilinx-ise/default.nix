@@ -1,59 +1,73 @@
-{ stdenv, lib, pkgs, callPackage, buildFHSEnv, writeScript, makeDesktopItem, libstdcxx5 }:
+{
+  stdenv,
+  lib,
+  pkgs,
+  callPackage,
+  buildFHSEnv,
+  writeScript,
+  makeDesktopItem,
+  libstdcxx5,
+}:
 
 let
   unwrapped = callPackage ./unwrapped.nix { };
   xilinx-jtag-fw = callPackage ./jtag-fw.nix { };
-  motif3-compat = pkgs: stdenv.mkDerivation {
-    name = "motif3-compat";
-    phases = [ "installPhase" ];
-    installPhase = ''
-      mkdir -p $out/lib
-      ln -s ${pkgs.motif}/lib/libXm.so.4 $out/lib/libXm.so.3
-    '';
-  };
-in buildFHSEnv rec {
+  motif3-compat =
+    pkgs:
+    stdenv.mkDerivation {
+      name = "motif3-compat";
+      phases = [ "installPhase" ];
+      installPhase = ''
+        mkdir -p $out/lib
+        ln -s ${pkgs.motif}/lib/libXm.so.4 $out/lib/libXm.so.3
+      '';
+    };
+in
+buildFHSEnv rec {
   name = "xilinx-ise";
 
-  targetPkgs = pkgs: with pkgs; [
-    fontconfig
-    freetype
-    glib
-    fxload
-    iproute2
-    libcxx
-    libusb-compat-0_1
-    libusb1
-    libuuid
-    motif
-    (motif3-compat pkgs)
-    xilinx-jtag-fw
-    libice
-    libsm
-    libx11
-    libxcursor
-    libxext
-    libxft
-    libxi
-    libxmu
-    libxp
-    libxrandr
-    libxrender
-    libxt
-    libxtst
-    zlib
+  targetPkgs =
+    pkgs: with pkgs; [
+      fontconfig
+      freetype
+      glib
+      fxload
+      iproute2
+      libcxx
+      libusb-compat-0_1
+      libusb1
+      libuuid
+      motif
+      (motif3-compat pkgs)
+      xilinx-jtag-fw
+      libice
+      libsm
+      libx11
+      libxcursor
+      libxext
+      libxft
+      libxi
+      libxmu
+      libxp
+      libxrandr
+      libxrender
+      libxt
+      libxtst
+      zlib
 
-    # Xilinx ISE expects QT3 but works fine with QT5.
-    libsForQt5.qtbase
-    libsForQt5.qtdeclarative
-    libsForQt5.qtimageformats
-    libsForQt5.qtsvg
-    libsForQt5.qtx11extras
-  ];
+      # Xilinx ISE expects QT3 but works fine with QT5.
+      libsForQt5.qtbase
+      libsForQt5.qtdeclarative
+      libsForQt5.qtimageformats
+      libsForQt5.qtsvg
+      libsForQt5.qtx11extras
+    ];
 
-  multiPkgs = pkgs: with pkgs; [
-    fxload
-    ncurses5
-  ];
+  multiPkgs =
+    pkgs: with pkgs; [
+      fxload
+      ncurses5
+    ];
 
   # Network namespace required so that a dummy NIC with the required MAC can
   # be provided.
@@ -65,40 +79,42 @@ in buildFHSEnv rec {
     "--cap-add CAP_NET_ADMIN"
   ];
 
-  extraInstallCommands = let
-    wrappers = import ./wrappers.nix;
-
-    desktopItemSymlinks = lib.foldr (item: str:
+  extraInstallCommands =
     let
-      desktopItem = makeDesktopItem {
-        type = "Application";
-        name = item.name;
-        desktopName = item.name;
-        comment = item.name;
-        icon = "${unwrapped}/opt/Xilinx/14.7/ISE_DS/ISE/icons/${item.icon}";
-        exec = "${name} ${item.exec}";
-      };
+      wrappers = import ./wrappers.nix;
+
+      desktopItemSymlinks = lib.foldr (
+        item: str:
+        let
+          desktopItem = makeDesktopItem {
+            type = "Application";
+            name = item.name;
+            desktopName = item.name;
+            comment = item.name;
+            icon = "${unwrapped}/opt/Xilinx/14.7/ISE_DS/ISE/icons/${item.icon}";
+            exec = "${name} ${item.exec}";
+          };
+        in
+        str + "ln -s ${desktopItem}/share/applications/* $out/share/applications\n"
+      ) "" wrappers.graphical;
+
+      executables = (map (item: item.exec) wrappers.graphical) ++ wrappers.commandLine;
     in
-      str + "ln -s ${desktopItem}/share/applications/* $out/share/applications\n"
-    ) "" wrappers.graphical;
+    ''
+      mkdir -p $out/share/applications
+      ${desktopItemSymlinks}
 
-    executables =
-      (map (item: item.exec) wrappers.graphical) ++ wrappers.commandLine;
-  in ''
-    mkdir -p $out/share/applications
-    ${desktopItemSymlinks}
-
-    WRAPPER=$out/bin/${name}
-    EXECUTABLES="${lib.concatStringsSep " " (executables)}"
-    for executable in $EXECUTABLES; do
-        echo "#!${stdenv.shell}" >> $out/$executable
-        echo "$WRAPPER $executable \$@" >> $out/$executable
-    done
-    cd $out
-    chmod +x $EXECUTABLES
-    # link into $out/bin so executables become available on $PATH
-    ln --symbolic --relative --target-directory $out/bin $EXECUTABLES
-  '';
+      WRAPPER=$out/bin/${name}
+      EXECUTABLES="${lib.concatStringsSep " " executables}"
+      for executable in $EXECUTABLES; do
+          echo "#!${stdenv.shell}" >> $out/$executable
+          echo "$WRAPPER $executable \$@" >> $out/$executable
+      done
+      cd $out
+      chmod +x $EXECUTABLES
+      # link into $out/bin so executables become available on $PATH
+      ln --symbolic --relative --target-directory $out/bin $EXECUTABLES
+    '';
 
   runScript = writeScript "${name}-wrapper" ''
     # Create the eth0 interface required for the included license.
