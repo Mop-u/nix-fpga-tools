@@ -33,6 +33,12 @@ let
       hash = "sha256-8+rgprS5YWlEA4vILg/MBKqlgm+HPEdUAhlTFQO0Tmc=";
 
     }) { inherit (pkgs.stdenv.hostPlatform) system; }).libstdcxx5;
+  default-browser =
+    pkgs:
+    pkgs.runCommandNoCC "default-browser-workaround" { } ''
+      mkdir -p $out/bin
+      ln -s ${pkgs.xdg-utils}/bin/xdg-open $out/bin/firefox
+    '';
 in
 buildFHSEnv rec {
   pname = "xilinx-ise";
@@ -40,6 +46,7 @@ buildFHSEnv rec {
 
   targetPkgs =
     pkgs: with pkgs; [
+      (default-browser pkgs)
       # (libstdcxx5 pkgs)
       fontconfig
       freetype
