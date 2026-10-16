@@ -33,11 +33,14 @@ let
       hash = "sha256-8+rgprS5YWlEA4vILg/MBKqlgm+HPEdUAhlTFQO0Tmc=";
 
     }) { inherit (pkgs.stdenv.hostPlatform) system; }).libstdcxx5;
-  default-browser =
+
+  # Applying the below fix as ise likely has the same LD_LIBRARY_PATH pollution problem.
+  # https://github.com/NixOS/nixpkgs/blob/ec63f4b01f177b7d8c92e7002e2d9292f886b67c/pkgs/by-name/qu/quartus-prime-lite/package.nix#L35-L48
+  xdgOpenWrapper =
     pkgs:
-    pkgs.runCommandNoCC "default-browser-workaround" { } ''
-      mkdir -p $out/bin
-      ln -s ${pkgs.xdg-utils}/bin/xdg-open $out/bin/firefox
+    pkgs.writeShellScriptBin "firefox" ''
+      export LD_LIBRARY_PATH=$XILINX_ORIG_LIBPATH
+      exec ${lib.getExe' pkgs.xdg-utils "xdg-open"} "$@"
     '';
 in
 buildFHSEnv rec {
@@ -46,7 +49,7 @@ buildFHSEnv rec {
 
   targetPkgs =
     pkgs: with pkgs; [
-      (default-browser pkgs)
+      (xdgOpenWrapper pkgs)
       # (libstdcxx5 pkgs)
       fontconfig
       freetype
@@ -157,6 +160,8 @@ buildFHSEnv rec {
     '';
 
   profile = ''
+    export XILINX_ORIG_LIBPATH=LD_LIBRARY_PATH
+
     # Configure the environment.
     source /opt/Xilinx/14.7/ISE_DS/common/.settings64.sh /opt/Xilinx/14.7/ISE_DS/common
     source /opt/Xilinx/14.7/ISE_DS/EDK/.settings64.sh /opt/Xilinx/14.7/ISE_DS/EDK
